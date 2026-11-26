@@ -11,7 +11,7 @@
     const themeIcon = document.getElementById('themeIcon');
     const themeLabel = document.getElementById('themeLabel');
 
-    // Referencias DOM - Bloque A (Tiempo Real — WebSockets / Firestore)
+    // Referencias DOM - Bloque A (Tiempo Real)
     const wsStatusBadge = document.getElementById('wsStatusBadge');
     const wsStatusText = document.getElementById('wsStatusText');
     const rtActualizadoEn = document.getElementById('rtActualizadoEn');
@@ -34,7 +34,7 @@
     const semNegPct = document.getElementById('semNegPct');
     const semModeracionNota = document.getElementById('semModeracionNota');
 
-    // Referencias DOM - Bloque B (Histórico REST — TiDB Cloud)
+    // Referencias DOM - Bloque B (Histórico)
     const histErrorBanner = document.getElementById('histErrorBanner');
     const etlMetaBadge = document.getElementById('etlMetaBadge');
     const kpiTotalUsuarios = document.getElementById('kpiTotalUsuarios');
@@ -49,10 +49,11 @@
     const mapPointsBadge = document.getElementById('mapPointsBadge');
     const privacyMapNote = document.getElementById('privacyMapNote');
 
-    // Instancias activas
+    // Instancias activas y cachés de estado
     let socket = null;
     let toastTimer = null;
     let ultimasMetricasCache = null;
+    let ultimoMapaDataCache = null;
 
     let chartRtCanales = null;
     let chartRtTemas = null;
@@ -61,6 +62,14 @@
     let chartIntereses = null;
     let leafletMap = null;
     let heatLayer = null;
+
+    const VISTAS_VALIDAS = [
+        'bloqueTiempoReal',
+        'seccionTendencias',
+        'seccionFeedVivo',
+        'bloqueHistorico',
+        'seccionMapaGeografico'
+    ];
 
     // Paleta editorial armónica para Chart.js
     const PALETA_EDITORIAL = [
@@ -185,7 +194,7 @@
     }
 
     // =========================================================================
-    // UTILIDADES GENERALES
+    // UTILIDADES Y NAVEGACIÓN POR VISTAS INDEPENDIENTES
     // =========================================================================
 
     function expulsarAlLogin() {
@@ -226,106 +235,97 @@
         return MAPA_ENCABEZADOS_TIPO[clave] || formatearEtiqueta(tipoRaw);
     }
 
-    function iniciarObservadorNavegacion() {
-        const enlaces = Array.from(document.querySelectorAll('.sidebar-nav a[href^="#"]'));
-        if (enlaces.length === 0) return;
-
-        const items = [];
-        for (const link of enlaces) {
-            const idDestino = link.getAttribute('href').slice(1);
-            const seccion = document.getElementById(idDestino);
-            if (seccion) {
-                items.push({ id: idDestino, link, seccion });
-            }
-        }
-        if (items.length === 0) return;
-
-        let bloqueoClickTimer = null;
-        let bloqueadoPorClick = false;
-
-        function marcarActivo(idActivo) {
-            for (const item of items) {
-                item.link.classList.toggle('active', item.id === idActivo);
-            }
-        }
-
-        function actualizarPorPosicion() {
-            if (bloqueadoPorClick) return;
-
-            // Si el usuario llegó al final del documento, activar la última sección
-            const alFinalDePagina =
-                window.innerHeight + window.scrollY >=
-                document.documentElement.scrollHeight - 35;
-
-            if (alFinalDePagina) {
-                marcarActivo(items[items.length - 1].id);
-                return;
-            }
-
-            // Elegir la última sección cuyo borde superior ya cruzó la franja superior (180px)
-            // Esto resuelve sub-secciones anidadas (#seccionTendencias y #seccionFeedVivo dentro de #bloqueTiempoReal)
-            const umbralSuperior = 180;
-            let elegido = items[0].id;
-
-            for (const item of items) {
-                const top = item.seccion.getBoundingClientRect().top;
-                if (top <= umbralSuperior) {
-                    elegido = item.id;
-                } else {
-                    break;
+    function ajustarComponentesDeVista(idVista) {
+        if (idVista === 'bloqueTiempoReal') {
+            requestAnimationFrame(() => {
+                if (chartRtCanales) chartRtCanales.resize();
+                if (chartRtTemas) chartRtTemas.resize();
+            });
+        } else if (idVista === 'bloqueHistorico') {
+            requestAnimationFrame(() => {
+                if (chartEstatus) chartEstatus.resize();
+                if (chartPlataformas) chartPlataformas.resize();
+                if (chartIntereses) chartIntereses.resize();
+            });
+        } else if (idVista === 'seccionMapaGeografico') {
+            setTimeout(() => {
+                if (!leafletMap && ultimoMapaDataCache) {
+                    montarMapaLeaflet(ultimoMapaDataCache);
+                } else if (leafletMap) {
+                    leafletMap.invalidateSize();
+                    if (heatLayer && typeof heatLayer.redraw === 'function') {
+                        heatLayer.redraw();
+                    }
                 }
+            }, 150);
+        }
+    }
+
+    function activarVista(idSolicitado, actualizarHistorial = true) {
+        const idVista = VISTAS_VALIDAS.includes(idSolicitado)
+            ? idSolicitado
+            : 'bloqueTiempoReal';
+
+        const vistas = document.querySelectorAll('.dashboard-view');
+        vistas.forEach((vista) => {
+            vista.classList.toggle('active', vista.id === idVista);
+        });
+
+        const enlaces = document.querySelectorAll('.sidebar-nav a[href^="#"]');
+        enlaces.forEach((link) => {
+            const destino = link.getAttribute('href').slice(1);
+            link.classList.toggle('active', destino === idVista);
+        });
+
+        if (actualizarHistorial) {
+            history.replaceState(null, '', `#${idVista}`);
+        }
+
+        window.scrollTo({ top: 0 });
+        ajustarComponentesDeVista(idVista);
+    }
+
+    function iniciarNavegacionVistas() {
+        const enlaces = document.querySelectorAll('.sidebar-nav a[href^="#"]');
+
+        enlaces.forEach((link) => {
+            link.addEventListener('click', (e) => {
+                e.preventDefault();
+                const idDestino = link.getAttribute('href').slice(1);
+                activarVista(idDestino, true);
+            });
+        });
+
+        window.addEventListener('hashchange', () => {
+            const hashActual = window.location.hash ? window.location.hash.slice(1) : '';
+            if (VISTAS_VALIDAS.includes(hashActual)) {
+                activarVista(hashActual, false);
             }
+        });
 
-            marcarActivo(elegido);
-        }
-
-        for (const item of items) {
-            item.link.addEventListener('click', () => {
-                bloqueadoPorClick = true;
-                marcarActivo(item.id);
-
-                if (bloqueoClickTimer) clearTimeout(bloqueoClickTimer);
-                bloqueoClickTimer = setTimeout(() => {
-                    bloqueadoPorClick = false;
-                }, 800);
-            });
-        }
-
-        // Si la URL ya trae un hash inicial (#seccionTendencias, etc.), respetarlo
         const hashInicial = window.location.hash ? window.location.hash.slice(1) : '';
-        if (hashInicial && items.some((i) => i.id === hashInicial)) {
-            marcarActivo(hashInicial);
-        } else {
-            actualizarPorPosicion();
-        }
+        const vistaInicial = VISTAS_VALIDAS.includes(hashInicial)
+            ? hashInicial
+            : 'bloqueTiempoReal';
 
-        if ('IntersectionObserver' in window) {
-            const observer = new IntersectionObserver(() => actualizarPorPosicion(), {
-                root: null,
-                rootMargin: '-10% 0px -55% 0px',
-                threshold: [0, 0.1, 0.5]
-            });
-            items.forEach((item) => observer.observe(item.seccion));
-        }
-
-        window.addEventListener('scroll', actualizarPorPosicion, { passive: true });
+        activarVista(vistaInicial, Boolean(hashInicial));
     }
 
     // =========================================================================
-    // BLOQUE A: MONITOREO EN TIEMPO REAL (WEBSOCKETS — FIREBASE FIRESTORE)
+    // SECCIONES EN TIEMPO REAL
     // =========================================================================
 
     function actualizarIndicadorSocket(conectado) {
         wsStatusBadge.classList.toggle('connected', conectado);
         wsStatusBadge.classList.toggle('disconnected', !conectado);
-        wsStatusText.textContent = conectado ? 'Conectado en vivo' : 'Desconectado';
+        wsStatusText.textContent = conectado ? 'En línea' : 'Sin conexión';
     }
 
     function mostrarToastTiempoReal(accion, idInteraccion) {
         const textos = {
-            POST: 'POST recibido desde Postman · Nueva interacción registrada',
-            PUT: 'PUT recibido desde Postman · Interacción modificada',
-            DELETE: 'DELETE recibido desde Postman · Interacción eliminada'
+            POST: 'Nueva interacción registrada',
+            PUT: 'Interacción actualizada',
+            DELETE: 'Interacción eliminada'
         };
         const claseTipo =
             accion === 'POST' ? 'toast-post' : accion === 'PUT' ? 'toast-put' : 'toast-delete';
@@ -334,19 +334,21 @@
         realtimeToast.textContent = '';
 
         const spanMsg = document.createElement('span');
-        spanMsg.textContent = textos[accion] || `Evento en tiempo real (${accion})`;
+        spanMsg.textContent = textos[accion] || 'Actividad reciente actualizada';
 
-        const spanId = document.createElement('span');
-        spanId.className = 'mono';
-        spanId.textContent = `ID: ${idInteraccion || '-'}`;
+        const spanHora = document.createElement('span');
+        spanHora.className = 'mono';
+        spanHora.textContent = idInteraccion
+            ? `Registro #${idInteraccion}`
+            : new Date().toLocaleTimeString('es-MX');
 
         realtimeToast.appendChild(spanMsg);
-        realtimeToast.appendChild(spanId);
+        realtimeToast.appendChild(spanHora);
 
         if (toastTimer) clearTimeout(toastTimer);
         toastTimer = setTimeout(() => {
             realtimeToast.classList.remove('visible');
-        }, 5500);
+        }, 5000);
     }
 
     function actualizarKPIsTiempoReal(metricas) {
@@ -370,7 +372,7 @@
 
         if (metricas.actualizado_en) {
             const fecha = new Date(metricas.actualizado_en);
-            rtActualizadoEn.textContent = `Sincronización: ${fecha.toLocaleTimeString('es-MX')}`;
+            rtActualizadoEn.textContent = `Último cambio: ${fecha.toLocaleTimeString('es-MX')}`;
         }
     }
 
@@ -518,7 +520,7 @@
         if (canales.length === 0 || tipos.length === 0) {
             const msg = document.createElement('p');
             msg.className = 'panel-subtitle';
-            msg.textContent = 'Sin datos suficientes para construir la matriz de actividad.';
+            msg.textContent = 'Aún no hay actividad suficiente para mostrar el resumen por canal.';
             rtHeatmapMatrix.appendChild(msg);
             return;
         }
@@ -539,7 +541,7 @@
 
         const thCorner = document.createElement('th');
         thCorner.className = 'row-header';
-        thCorner.textContent = 'Canal \\ Tipo';
+        thCorner.textContent = 'Canal';
         headRow.appendChild(thCorner);
 
         for (const tipo of tipos) {
@@ -601,7 +603,7 @@
             const empty = document.createElement('p');
             empty.className = 'panel-subtitle';
             empty.style.marginBottom = '0';
-            empty.textContent = 'Aún no hay etiquetas registradas en las interacciones.';
+            empty.textContent = 'Todavía no hay etiquetas destacadas en las conversaciones recientes.';
             rtTopEtiquetasList.appendChild(empty);
             return;
         }
@@ -667,10 +669,10 @@
         semBarNeg.style.width = `${negPct}%`;
 
         if (negPct >= 30) {
-            semModeracionNota.textContent = `Alerta de moderación: ${negPct.toFixed(1)}% negativas (< -0.10)`;
+            semModeracionNota.textContent = `Atención recomendada: ${negPct.toFixed(1)}% de comentarios negativos`;
             semModeracionNota.style.color = 'var(--negative)';
         } else {
-            semModeracionNota.textContent = 'Clima comunitario estable · Umbrales: > +0.10 | [-0.10, +0.10] | < -0.10';
+            semModeracionNota.textContent = 'Clima comunitario estable';
             semModeracionNota.style.color = 'var(--text-muted)';
         }
     }
@@ -685,7 +687,7 @@
         if (lista.length === 0) {
             const vacio = document.createElement('li');
             vacio.className = 'interaction-item';
-            vacio.textContent = 'No hay interacciones registradas.';
+            vacio.textContent = 'Aún no hay actividad registrada.';
             rtListaInteracciones.appendChild(vacio);
             return;
         }
@@ -699,22 +701,22 @@
 
             const idUser = document.createElement('span');
             idUser.className = 'interaction-id-user';
-            const alias = item.usuario_snapshot?.alias || item.id_usuario || 'Usuario';
-            idUser.textContent = `${item.id_interaccion} · ${alias} (${item.id_usuario || '-'})`;
+            const alias = item.usuario_snapshot?.alias || 'Miembro de la comunidad';
+            idUser.textContent = `${alias} · #${item.id_interaccion}`;
 
             const sentVal = Number(item.sentimiento ?? 0);
             const sentPill = document.createElement('span');
             sentPill.className = `sent-pill ${
                 sentVal > 0 ? 'sent-pos' : sentVal < 0 ? 'sent-neg' : 'sent-neu'
             }`;
-            sentPill.textContent = `${sentVal > 0 ? '+' : ''}${sentVal.toFixed(2)}`;
+            sentPill.textContent = sentVal > 0 ? 'Favorable' : sentVal < 0 ? 'Crítico' : 'Neutro';
 
             top.appendChild(idUser);
             top.appendChild(sentPill);
 
             const textDiv = document.createElement('div');
             textDiv.className = 'interaction-text';
-            textDiv.textContent = item.texto || '(Interacción sin texto)';
+            textDiv.textContent = item.texto || '(Reacción o participación sin mensaje escrito)';
 
             const metaRow = document.createElement('div');
             metaRow.className = 'interaction-meta-row';
@@ -731,7 +733,7 @@
 
             const pillTipo = document.createElement('span');
             pillTipo.className = 'meta-pill';
-            pillTipo.textContent = formatearEtiqueta(item.tipo);
+            pillTipo.textContent = obtenerNombreCortoTipo(item.tipo);
             metaRow.appendChild(pillTipo);
 
             const etiquetas = Array.isArray(item.etiquetas) ? item.etiquetas : [];
@@ -797,7 +799,7 @@
     }
 
     // =========================================================================
-    // BLOQUE B: ANALÍTICA HISTÓRICA CONSOLIDADA (API REST — TIDB CLOUD)
+    // SECCIONES HISTÓRICAS
     // =========================================================================
 
     async function fetchProtegido(url, token) {
@@ -810,11 +812,11 @@
 
         if (res.status === 401 || res.status === 403) {
             expulsarAlLogin();
-            throw new Error('Sesión expirada o no autorizada.');
+            throw new Error('Sesión expirada.');
         }
 
         if (!res.ok) {
-            throw new Error(`Error HTTP ${res.status} al consultar ${url}`);
+            throw new Error('No fue posible obtener los datos solicitados.');
         }
 
         return res.json();
@@ -831,29 +833,29 @@
         const mensajes30d = Number(resumen.mensajes_30d_total || 0);
 
         kpiTotalUsuarios.textContent = formatearNumero(total);
-        kpiMensajesSub.textContent = `${formatearNumero(mensajes30d)} mensajes en últimos 30d`;
+        kpiMensajesSub.textContent = `${formatearNumero(mensajes30d)} mensajes en los últimos 30 días`;
 
         kpiUsuariosActivos.textContent = formatearNumero(activos);
         const pctActivos = total > 0 ? ((activos / total) * 100).toFixed(1) : '0.0';
-        kpiActivosPct.textContent = `${pctActivos}% del padrón total`;
+        kpiActivosPct.textContent = `${pctActivos}% del total de miembros`;
 
         kpiUsuariosRiesgo.textContent = formatearNumero(enRiesgo);
-        kpiInactivosSub.textContent = `Inactivos acumulados: ${formatearNumero(inactivos)}`;
+        kpiInactivosSub.textContent = `Miembros inactivos: ${formatearNumero(inactivos)}`;
 
         kpiTotalArtistas.textContent = formatearNumero(artistas);
-        kpiSentimientoGlobalSub.textContent = `Sentimiento histórico: ${sentGlobal >= 0 ? '+' : ''}${sentGlobal.toFixed(3)}`;
+        kpiSentimientoGlobalSub.textContent = `Ánimo promedio general: ${sentGlobal >= 0 ? '+' : ''}${sentGlobal.toFixed(2)}`;
 
         kpiUsuariosAnonimizados.textContent = formatearNumero(anonimizados);
 
         privacyMapNote.innerHTML =
-            `<strong>Aviso de Privacidad Activo:</strong> Los <strong>${formatearNumero(anonimizados)} usuarios</strong> ` +
-            `con <code>consentimiento_datos = 'no'</code> fueron excluidos estrictamente de este mapa geográfico por privacidad.`;
+            `<strong>Respeto a la privacidad:</strong> Por privacidad, los <strong>${formatearNumero(anonimizados)} miembros</strong> ` +
+            `que no autorizaron compartir su ubicación fueron excluidos de este mapa.`;
 
         if (resumen.bitacora_etl && resumen.bitacora_etl.fecha_ejecucion) {
             const fechaEtl = new Date(resumen.bitacora_etl.fecha_ejecucion);
-            etlMetaBadge.textContent = `ETL ${fechaEtl.toLocaleDateString('es-MX')} · ACEPTADAS: ${formatearNumero(resumen.bitacora_etl.interacciones_aceptadas)}`;
+            etlMetaBadge.textContent = `Último corte: ${fechaEtl.toLocaleDateString('es-MX')}`;
         } else {
-            etlMetaBadge.textContent = 'TIDB CLOUD CONECTADO';
+            etlMetaBadge.textContent = 'Corte histórico al día';
         }
     }
 
@@ -916,7 +918,7 @@
                 labels: platItems.map((i) => i.plataforma),
                 datasets: [
                     {
-                        label: 'Usuarios',
+                        label: 'Miembros',
                         data: platItems.map((i) => Number(i.total || 0)),
                         backgroundColor: t.accentPrimary,
                         borderColor: t.accentPrimary,
@@ -955,7 +957,7 @@
                 labels: interesItems.map((i) => i.interes),
                 datasets: [
                     {
-                        label: 'Usuarios',
+                        label: 'Miembros',
                         data: interesItems.map((i) => Number(i.total || 0)),
                         backgroundColor: t.accentSecondary,
                         borderColor: t.accentSecondary,
@@ -986,9 +988,8 @@
         });
     }
 
-    function renderizarMapaCalor(mapaData) {
+    function montarMapaLeaflet(mapaData) {
         const puntos = Array.isArray(mapaData.puntos) ? mapaData.puntos : [];
-        mapPointsBadge.textContent = `${formatearNumero(puntos.length)} UBICACIONES CON CONSENTIMIENTO`;
 
         if (!leafletMap) {
             leafletMap = L.map('heatmapUsuarios', {
@@ -1002,6 +1003,8 @@
                 maxZoom: 19
             }).addTo(leafletMap);
         }
+
+        leafletMap.invalidateSize();
 
         const coordenadasHeat = puntos.map((p) => [
             Number(p.latitud),
@@ -1032,8 +1035,19 @@
         }
 
         setTimeout(() => {
-            leafletMap.invalidateSize();
+            if (leafletMap) leafletMap.invalidateSize();
         }, 150);
+    }
+
+    function renderizarMapaCalor(mapaData) {
+        ultimoMapaDataCache = mapaData;
+        const puntos = Array.isArray(mapaData.puntos) ? mapaData.puntos : [];
+        mapPointsBadge.textContent = `${formatearNumero(puntos.length)} miembros ubicados`;
+
+        const vistaMapa = document.getElementById('seccionMapaGeografico');
+        if (vistaMapa && vistaMapa.classList.contains('active')) {
+            montarMapaLeaflet(mapaData);
+        }
     }
 
     async function cargarAnaliticaHistorica(token) {
@@ -1050,9 +1064,9 @@
             renderizarKPIsHistoricos(resumen);
             renderizarGraficasHistoricas(distribucion);
             renderizarMapaCalor(mapa);
-        } catch (error) {
+        } catch (_) {
             histErrorBanner.textContent =
-                `No fue posible cargar la analítica histórica desde TiDB Cloud: ${error.message}`;
+                'No fue posible cargar la información histórica en este momento. Intenta actualizar la página.';
             histErrorBanner.classList.add('visible');
         }
     }
@@ -1090,7 +1104,7 @@
             loadingScreen.style.display = 'none';
             protectedApp.style.display = 'block';
 
-            iniciarObservadorNavegacion();
+            iniciarNavegacionVistas();
             conectarWebSockets(token);
             await cargarAnaliticaHistorica(token);
         } catch (_) {

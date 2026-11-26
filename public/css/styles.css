@@ -628,7 +628,32 @@ body {
     padding: 2rem 2.5rem 3.5rem;
     display: flex;
     flex-direction: column;
-    gap: 2.75rem;
+    gap: 1.5rem;
+}
+
+/* Vistas Independientes SPA (.dashboard-view) */
+.dashboard-view {
+    display: none;
+}
+
+.dashboard-view.active {
+    display: block;
+    animation: fadeIn 0.22s ease-out;
+}
+
+.dashboard-view.active > * + * {
+    margin-top: 1.25rem;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 .page-intro {

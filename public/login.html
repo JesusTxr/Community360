@@ -32,33 +32,32 @@
     <div class="login-split">
         <!-- Panel Izquierdo Editorial -->
         <aside class="login-brand-panel">
-            <div class="brand-top-eyebrow">ARQUITECTURA DE DATOS EN LA NUBE</div>
+            <div class="brand-top-eyebrow">PLATAFORMA DE GESTIÓN COMUNITARIA</div>
 
             <div class="brand-hero">
                 <div class="brand-wordmark">COMMUNITY <span>360</span></div>
                 <p class="brand-editorial-lead">
-                    Observatorio analítico sobre arquitectura híbrida distribuida: padrón relacional normalizado en
-                    <strong>TiDB Cloud Serverless</strong> y telemetría documental en tiempo real sobre
-                    <strong>Firebase Cloud Firestore</strong>.
+                    Centro integral de inteligencia comunitaria para comprender la participación, el ánimo colectivo y
+                    el crecimiento de tus miembros desde un solo espacio claro y confiable.
                 </p>
 
                 <ul class="brand-capabilities">
                     <li>
                         <span class="cap-bullet">01</span>
-                        <span><strong>Autenticación JWT</strong> &mdash; Control de acceso administrativo cifrado con bcrypt y sesiones firmadas.</span>
+                        <span><strong>Acceso seguro para administradores</strong> &mdash; Protección de cuentas autorizadas para resguardar la información de la comunidad.</span>
                     </li>
                     <li>
                         <span class="cap-bullet">02</span>
-                        <span><strong>Métricas Históricas REST</strong> &mdash; Indicadores consolidados, catálogos SQL y densidad espacial con privacidad por diseño.</span>
+                        <span><strong>Análisis histórico de la comunidad</strong> &mdash; Panorama completo de miembros, intereses, canales preferidos y presencia regional.</span>
                     </li>
                     <li>
                         <span class="cap-bullet">03</span>
-                        <span><strong>Tiempo Real WebSockets</strong> &mdash; Transmisión reactiva instantánea vía Socket.io ante mutaciones de la API.</span>
+                        <span><strong>Monitoreo de actividad en vivo</strong> &mdash; Seguimiento al instante de conversaciones recientes, temas en tendencia y clima emocional.</span>
                     </li>
                 </ul>
             </div>
 
-            <div class="brand-footer-meta">SQL + NoSQL &middot; PRIVACY-BY-DESIGN</div>
+            <div class="brand-footer-meta">COMMUNITY 360 &middot; ANÁLISIS Y PRIVACIDAD</div>
         </aside>
 
         <!-- Panel Derecho de Formulario -->
@@ -72,9 +71,9 @@
 
             <div class="login-form-wrapper">
                 <header class="login-heading">
-                    <span class="eyebrow">Acceso Administrativo</span>
+                    <span class="eyebrow">Panel Administrativo</span>
                     <h1>Iniciar sesión</h1>
-                    <p>Ingresa tus credenciales institucionales para acceder al panel analítico.</p>
+                    <p>Ingresa tu correo y contraseña para acceder al panel de la comunidad.</p>
                 </header>
 
                 <div id="errorBox" class="alert-error" role="alert"></div>
@@ -86,7 +85,7 @@
                             type="email"
                             id="email"
                             name="email"
-                            placeholder="nombre@institucion.edu.mx"
+                            placeholder="nombre@organizacion.com"
                             autocomplete="username"
                             required
                         />
@@ -105,12 +104,12 @@
                     </div>
 
                     <button type="submit" id="btnSubmit" class="btn-primary">
-                        Acceder al Dashboard
+                        Entrar al Panel
                     </button>
                 </form>
 
                 <p class="login-legal">
-                    Sesión verificada mediante JSON Web Token (JWT) con vigencia de 4 horas.
+                    Por seguridad, tu sesión administrativa permanece activa durante 4 horas.
                 </p>
             </div>
         </main>
@@ -175,7 +174,7 @@
                 }
 
                 btnSubmit.disabled = true;
-                btnSubmit.textContent = 'Verificando credenciales...';
+                btnSubmit.textContent = 'Iniciando sesión...';
 
                 try {
                     const response = await fetch('/api/auth/login', {
@@ -196,10 +195,10 @@
                     localStorage.setItem('c360_token', data.token);
                     window.location.replace('/dashboard.html');
                 } catch (_) {
-                    mostrarError('Error de conexión con el servidor. Intenta de nuevo.');
+                    mostrarError('No se pudo conectar con el servicio. Intenta nuevamente.');
                 } finally {
                     btnSubmit.disabled = false;
-                    btnSubmit.textContent = 'Acceder al Dashboard';
+                    btnSubmit.textContent = 'Entrar al Panel';
                 }
             });
         })();
