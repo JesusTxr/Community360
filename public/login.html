@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Iniciar Sesión | COMMUNITY 360</title>
+
+    <!-- Sincronización inmediata de tema y redirección si ya hay sesión -->
+    <script>
+        (function () {
+            const savedTheme = localStorage.getItem('c360_theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme === 'dark' ? 'dark' : 'light');
+
+            const existingToken = localStorage.getItem('c360_token');
+            if (existingToken) {
+                window.location.replace('/dashboard.html');
+            }
+        })();
+    </script>
+
+    <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+        rel="stylesheet"
+    />
+
+    <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+    <div class="login-split">
+        <!-- Panel Izquierdo Editorial -->
+        <aside class="login-brand-panel">
+            <div class="brand-top-eyebrow">ARQUITECTURA DE DATOS EN LA NUBE</div>
+
+            <div class="brand-hero">
+                <div class="brand-wordmark">COMMUNITY <span>360</span></div>
+                <p class="brand-editorial-lead">
+                    Observatorio analítico sobre arquitectura híbrida distribuida: padrón relacional normalizado en
+                    <strong>TiDB Cloud Serverless</strong> y telemetría documental en tiempo real sobre
+                    <strong>Firebase Cloud Firestore</strong>.
+                </p>
+
+                <ul class="brand-capabilities">
+                    <li>
+                        <span class="cap-bullet">01</span>
+                        <span><strong>Autenticación JWT</strong> &mdash; Control de acceso administrativo cifrado con bcrypt y sesiones firmadas.</span>
+                    </li>
+                    <li>
+                        <span class="cap-bullet">02</span>
+                        <span><strong>Métricas Históricas REST</strong> &mdash; Indicadores consolidados, catálogos SQL y densidad espacial con privacidad por diseño.</span>
+                    </li>
+                    <li>
+                        <span class="cap-bullet">03</span>
+                        <span><strong>Tiempo Real WebSockets</strong> &mdash; Transmisión reactiva instantánea vía Socket.io ante mutaciones de la API.</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="brand-footer-meta">SQL + NoSQL &middot; PRIVACY-BY-DESIGN</div>
+        </aside>
+
+        <!-- Panel Derecho de Formulario -->
+        <main class="login-form-panel">
+            <div class="login-topbar">
+                <button type="button" id="btnThemeToggle" class="theme-toggle-btn" aria-label="Alternar tema">
+                    <span id="themeIcon" aria-hidden="true"></span>
+                    <span id="themeLabel">Modo Oscuro</span>
+                </button>
+            </div>
+
+            <div class="login-form-wrapper">
+                <header class="login-heading">
+                    <span class="eyebrow">Acceso Administrativo</span>
+                    <h1>Iniciar sesión</h1>
+                    <p>Ingresa tus credenciales institucionales para acceder al panel analítico.</p>
+                </header>
+
+                <div id="errorBox" class="alert-error" role="alert"></div>
+
+                <form id="loginForm" novalidate>
+                    <div class="form-field">
+                        <label for="email">Correo electrónico</label>
+                        <input
+                            type="email"
+                            id="email"
+                            name="email"
+                            placeholder="nombre@institucion.edu.mx"
+                            autocomplete="username"
+                            required
+                        />
+                    </div>
+
+                    <div class="form-field">
+                        <label for="password">Contraseña</label>
+                        <input
+                            type="password"
+                            id="password"
+                            name="password"
+                            placeholder="••••••••••••"
+                            autocomplete="current-password"
+                            required
+                        />
+                    </div>
+
+                    <button type="submit" id="btnSubmit" class="btn-primary">
+                        Acceder al Dashboard
+                    </button>
+                </form>
+
+                <p class="login-legal">
+                    Sesión verificada mediante JSON Web Token (JWT) con vigencia de 4 horas.
+                </p>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        (function () {
+            const btnThemeToggle = document.getElementById('btnThemeToggle');
+            const themeIcon = document.getElementById('themeIcon');
+            const themeLabel = document.getElementById('themeLabel');
+
+            const loginForm = document.getElementById('loginForm');
+            const emailInput = document.getElementById('email');
+            const passwordInput = document.getElementById('password');
+            const btnSubmit = document.getElementById('btnSubmit');
+            const errorBox = document.getElementById('errorBox');
+
+            const ICON_MOON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+            const ICON_SUN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>';
+
+            function actualizarBotonTema(theme) {
+                if (theme === 'dark') {
+                    themeIcon.innerHTML = ICON_SUN;
+                    themeLabel.textContent = 'Modo Claro';
+                } else {
+                    themeIcon.innerHTML = ICON_MOON;
+                    themeLabel.textContent = 'Modo Oscuro';
+                }
+            }
+
+            const initialTheme = document.documentElement.getAttribute('data-theme') || 'light';
+            actualizarBotonTema(initialTheme);
+
+            btnThemeToggle.addEventListener('click', () => {
+                const actual = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+                const siguiente = actual === 'dark' ? 'light' : 'dark';
+                document.documentElement.setAttribute('data-theme', siguiente);
+                localStorage.setItem('c360_theme', siguiente);
+                actualizarBotonTema(siguiente);
+            });
+
+            function mostrarError(mensaje) {
+                errorBox.textContent = mensaje;
+                errorBox.classList.add('visible');
+            }
+
+            function limpiarError() {
+                errorBox.textContent = '';
+                errorBox.classList.remove('visible');
+            }
+
+            loginForm.addEventListener('submit', async (event) => {
+                event.preventDefault();
+                limpiarError();
+
+                const email = emailInput.value.trim();
+                const password = passwordInput.value;
+
+                if (!email || !password) {
+                    mostrarError('Por favor ingresa tu correo electrónico y contraseña.');
+                    return;
+                }
+
+                btnSubmit.disabled = true;
+                btnSubmit.textContent = 'Verificando credenciales...';
+
+                try {
+                    const response = await fetch('/api/auth/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ email, password })
+                    });
+
+                    const data = await response.json();
+
+                    if (!response.ok || !data.token) {
+                        mostrarError(data.mensaje || 'No fue posible iniciar sesión.');
+                        return;
+                    }
+
+                    localStorage.setItem('c360_token', data.token);
+                    window.location.replace('/dashboard.html');
+                } catch (_) {
+                    mostrarError('Error de conexión con el servidor. Intenta de nuevo.');
+                } finally {
+                    btnSubmit.disabled = false;
+                    btnSubmit.textContent = 'Acceder al Dashboard';
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

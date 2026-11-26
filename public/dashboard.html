@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard Analítico | COMMUNITY 360</title>
+
+    <!-- Sincronización inmediata del tema antes de renderizar -->
+    <script>
+        (function () {
+            const savedTheme = localStorage.getItem('c360_theme') || 'light';
+            document.documentElement.setAttribute('data-theme', savedTheme === 'dark' ? 'dark' : 'light');
+        })();
+    </script>
+
+    <!-- Google Fonts: Plus Jakarta Sans & JetBrains Mono -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
+        rel="stylesheet"
+    />
+
+    <!-- Leaflet CSS (CDN) -->
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        crossorigin=""
+    />
+
+    <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body>
+    <div id="loadingScreen">
+        <div class="spinner" aria-hidden="true"></div>
+        <span>Verificando sesión segura...</span>
+    </div>
+
+    <div id="protectedApp">
+        <div class="app-shell">
+            <!-- Sidebar Editorial Fijo (240px) -->
+            <aside class="sidebar">
+                <div class="sidebar-top">
+                    <div class="sidebar-brand">
+                        <div class="sidebar-brand-title">COMMUNITY 360</div>
+                        <div class="sidebar-brand-sub">Analítica Comunitaria</div>
+                    </div>
+
+                    <nav aria-label="Secciones del dashboard">
+                        <div class="sidebar-nav-label">Navegación</div>
+                        <ul class="sidebar-nav">
+                            <li>
+                                <a href="#bloqueTiempoReal">
+                                    <span class="nav-index">01</span>
+                                    <span>Tiempo Real</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#seccionTendencias">
+                                    <span class="nav-index">02</span>
+                                    <span>Tendencias y Sentimiento</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#seccionFeedVivo">
+                                    <span class="nav-index">03</span>
+                                    <span>Feed en Vivo</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#bloqueHistorico">
+                                    <span class="nav-index">04</span>
+                                    <span>Analítica Histórica</span>
+                                </a>
+                            </li>
+                            <li>
+                                <a href="#seccionMapaGeografico">
+                                    <span class="nav-index">05</span>
+                                    <span>Mapa Geográfico</span>
+                                </a>
+                            </li>
+                        </ul>
+                    </nav>
+
+                    <div class="sidebar-ws-box">
+                        <span id="wsStatusBadge" class="ws-badge disconnected">
+                            <span class="ws-dot" aria-hidden="true"></span>
+                            <span id="wsStatusText">Desconectado</span>
+                        </span>
+                        <span id="rtActualizadoEn" class="ws-last-sync">Sincronización: --:--:--</span>
+                    </div>
+                </div>
+
+                <div class="sidebar-bottom">
+                    <button type="button" id="btnThemeToggle" class="theme-toggle-btn" aria-label="Alternar tema">
+                        <span id="themeIcon" aria-hidden="true"></span>
+                        <span id="themeLabel">Modo Oscuro</span>
+                    </button>
+
+                    <div class="admin-profile">
+                        <div id="adminNombre" class="admin-name"></div>
+                        <div id="adminEmail" class="admin-email"></div>
+                    </div>
+
+                    <button type="button" id="btnLogout" class="btn-logout">
+                        Cerrar Sesión
+                    </button>
+                </div>
+            </aside>
+
+            <!-- Contenido Principal -->
+            <div class="dashboard-main">
+                <main id="dashboardContainer" class="dashboard-container">
+                    <header class="page-intro">
+                        <div>
+                            <h1>Panel de Observabilidad Híbrida</h1>
+                            <p>Lectura unificada sobre Firebase Cloud Firestore (NoSQL) y TiDB Cloud Serverless (SQL).</p>
+                        </div>
+                        <span class="meta-tag">MODO LECTURA &middot; CRUD VÍA POSTMAN</span>
+                    </header>
+
+                    <!-- ========================================================== -->
+                    <!-- BLOQUE A (ARRIBA): MONITOREO EN TIEMPO REAL (WEBSOCKETS)    -->
+                    <!-- ========================================================== -->
+                    <section id="bloqueTiempoReal" class="analytics-block" aria-labelledby="tituloBloqueA">
+                        <div class="block-header">
+                            <div>
+                                <div class="block-eyebrow secondary">Bloque A &middot; WebSockets &middot; Firebase Firestore</div>
+                                <h2 id="tituloBloqueA">Monitoreo en Tiempo Real</h2>
+                                <p>Indicadores reactivos actualizados automáticamente ante eventos POST, PUT y DELETE.</p>
+                            </div>
+                        </div>
+
+                        <div id="realtimeToast" class="realtime-toast" role="status" aria-live="polite"></div>
+
+                        <!-- 4 Tarjetas KPI Dinámicas -->
+                        <div class="kpi-grid-4">
+                            <article class="kpi-card">
+                                <span class="kpi-label">Interacciones Válidas</span>
+                                <span id="rtTotalInteracciones" class="kpi-value">--</span>
+                                <span class="kpi-sub">Documentos activos en Firestore</span>
+                            </article>
+
+                            <article class="kpi-card">
+                                <span class="kpi-label">Sentimiento en Vivo</span>
+                                <span id="rtSentimientoPromedio" class="kpi-value">--</span>
+                                <span class="kpi-sub">Promedio en escala [-1.000, +1.000]</span>
+                            </article>
+
+                            <article class="kpi-card">
+                                <span class="kpi-label">Tasa de Positividad</span>
+                                <span id="rtTasaPositividad" class="kpi-value">--</span>
+                                <span class="kpi-sub">(Sentimiento &gt; 0 / Total) &times; 100</span>
+                            </article>
+
+                            <article class="kpi-card">
+                                <span class="kpi-label">Promedio de Reacciones</span>
+                                <span id="rtPromedioReacciones" class="kpi-value">--</span>
+                                <span class="kpi-sub">Reacciones por interacción</span>
+                            </article>
+                        </div>
+
+                        <!-- Gráficas Chart.js en Tiempo Real -->
+                        <div class="charts-grid-2">
+                            <article class="panel-card">
+                                <h3>Interacciones por Canal</h3>
+                                <p class="panel-subtitle">Volumen en vivo actualizado sin recargar el lienzo</p>
+                                <div class="chart-wrapper">
+                                    <canvas id="chartRtCanales"></canvas>
+                                </div>
+                            </article>
+
+                            <article class="panel-card">
+                                <h3>Distribución por Tema</h3>
+                                <p class="panel-subtitle">Proporción temática activa en la comunidad</p>
+                                <div class="chart-wrapper">
+                                    <canvas id="chartRtTemas"></canvas>
+                                </div>
+                            </article>
+                        </div>
+
+                        <!-- Fila de 2 Columnas: Top 5 Etiquetas + Semáforo de Sentimiento -->
+                        <div id="seccionTendencias" class="charts-grid-2">
+                            <article class="panel-card">
+                                <h3>Top 5 Etiquetas en Tendencia</h3>
+                                <p class="panel-subtitle">Etiquetas con mayor frecuencia en documentos válidos</p>
+                                <div id="rtTopEtiquetasList" class="trending-tags-list">
+                                    <p class="panel-subtitle" style="margin-bottom: 0;">Sincronizando etiquetas...</p>
+                                </div>
+                            </article>
+
+                            <article class="panel-card">
+                                <h3>Semáforo de Sentimiento</h3>
+                                <p class="panel-subtitle">Balance emocional y detección preventiva para moderación</p>
+
+                                <div class="semaforo-segmented-bar" aria-label="Barra proporcional de sentimiento">
+                                    <div id="semBarPos" class="sem-segment sem-seg-pos" style="width: 0%;" title="Positivas"></div>
+                                    <div id="semBarNeu" class="sem-segment sem-seg-neu" style="width: 0%;" title="Neutras"></div>
+                                    <div id="semBarNeg" class="sem-segment sem-seg-neg" style="width: 0%;" title="Negativas"></div>
+                                </div>
+
+                                <div class="semaforo-grid">
+                                    <div class="semaforo-item">
+                                        <div class="semaforo-dot-label">
+                                            <span class="sem-dot" style="background-color: var(--positive);"></span>
+                                            <span>Positivas</span>
+                                        </div>
+                                        <div id="semPosConteo" class="semaforo-count">--</div>
+                                        <div id="semPosPct" class="semaforo-pct" style="color: var(--positive);">0.0%</div>
+                                    </div>
+
+                                    <div class="semaforo-item">
+                                        <div class="semaforo-dot-label">
+                                            <span class="sem-dot" style="background-color: var(--neutral);"></span>
+                                            <span>Neutras</span>
+                                        </div>
+                                        <div id="semNeuConteo" class="semaforo-count">--</div>
+                                        <div id="semNeuPct" class="semaforo-pct" style="color: var(--neutral);">0.0%</div>
+                                    </div>
+
+                                    <div class="semaforo-item">
+                                        <div class="semaforo-dot-label">
+                                            <span class="sem-dot" style="background-color: var(--negative);"></span>
+                                            <span>Negativas</span>
+                                        </div>
+                                        <div id="semNegConteo" class="semaforo-count">--</div>
+                                        <div id="semNegPct" class="semaforo-pct" style="color: var(--negative);">0.0%</div>
+                                    </div>
+                                </div>
+
+                                <div id="semModeracionNota" class="semaforo-note">Umbrales: &gt; +0.10 | [-0.10, +0.10] | &lt; -0.10</div>
+                            </article>
+                        </div>
+
+                        <!-- Matriz de Calor + Feed en Vivo -->
+                        <div id="seccionFeedVivo" class="realtime-bottom-grid">
+                            <article class="panel-card">
+                                <h3>Matriz de Actividad (Canal vs. Tipo)</h3>
+                                <p class="panel-subtitle">Concentración cruzada de interacciones en tiempo real</p>
+                                <div id="rtHeatmapMatrix" class="matrix-scroll"></div>
+                                <div class="matrix-legend">
+                                    <span>Menor</span>
+                                    <span class="legend-bar" aria-hidden="true"></span>
+                                    <span>Mayor intensidad</span>
+                                </div>
+                            </article>
+
+                            <article class="panel-card">
+                                <h3>Feed en Vivo (Últimas 10 Interacciones)</h3>
+                                <p class="panel-subtitle">Registro cronológico descendente desde Firestore</p>
+                                <ul id="rtListaInteracciones" class="interactions-list">
+                                    <li class="interaction-item">Sincronizando flujo en vivo...</li>
+                                </ul>
+                            </article>
+                        </div>
+                    </section>
+
+                    <!-- ========================================================== -->
+                    <!-- BLOQUE B (ABAJO): ANALÍTICA HISTÓRICA CONSOLIDADA (REST)    -->
+                    <!-- ========================================================== -->
+                    <section id="bloqueHistorico" class="analytics-block" aria-labelledby="tituloBloqueB">
+                        <div class="block-header">
+                            <div>
+                                <div class="block-eyebrow">Bloque B &middot; API REST &middot; TiDB Cloud SQL</div>
+                                <h2 id="tituloBloqueB">Analítica Histórica Consolidada</h2>
+                                <p>Padrón relacional maestro y catálogos normalizados consultados mediante JWT.</p>
+                            </div>
+
+                            <span id="etlMetaBadge" class="meta-tag">Cargando bitácora ETL...</span>
+                        </div>
+
+                        <div id="histErrorBanner" class="error-banner" role="alert"></div>
+
+                        <!-- 5 Tarjetas KPI Históricas -->
+                        <div class="kpi-grid-5">
+                            <article class="kpi-card">
+                                <span class="kpi-label">Total de Usuarios</span>
+                                <span id="kpiTotalUsuarios" class="kpi-value">--</span>
+                                <span id="kpiMensajesSub" class="kpi-sub">Padrón maestro depurado</span>
+                            </article>
+
+                            <article class="kpi-card">
+                                <span class="kpi-label">Usuarios Activos</span>
+                                <span id="kpiUsuariosActivos" class="kpi-value">--</span>
+                                <span id="kpiActivosPct" class="kpi-sub">Participación constante</span>
+                            </article>
+
+                            <article class="kpi-card">
+                                <span class="kpi-label">En Riesgo de Abandono</span>
+                                <span id="kpiUsuariosRiesgo" class="kpi-value">--</span>
+                                <span id="kpiInactivosSub" class="kpi-sub">Alerta temprana de retención</span>
+                            </article>
+
+                            <article class="kpi-card">
+                                <span class="kpi-label">Total de Artistas</span>
+                                <span id="kpiTotalArtistas" class="kpi-value">--</span>
+                                <span id="kpiSentimientoGlobalSub" class="kpi-sub">Creadores en la comunidad</span>
+                            </article>
+
+                            <article class="kpi-card">
+                                <span class="kpi-label">Usuarios Anonimizados</span>
+                                <span id="kpiUsuariosAnonimizados" class="kpi-value">--</span>
+                                <span class="kpi-sub">Ubicación protegida (sin consentimiento)</span>
+                            </article>
+                        </div>
+
+                        <!-- Gráficas Chart.js Históricas -->
+                        <div class="charts-grid-3">
+                            <article class="panel-card">
+                                <h3>Distribución por Estatus</h3>
+                                <p class="panel-subtitle">Usuarios activos, en riesgo e inactivos</p>
+                                <div class="chart-wrapper">
+                                    <canvas id="chartHistEstatus"></canvas>
+                                </div>
+                            </article>
+
+                            <article class="panel-card">
+                                <h3>Usuarios por Plataforma</h3>
+                                <p class="panel-subtitle">Consolidado vía JOIN con cat_plataformas</p>
+                                <div class="chart-wrapper">
+                                    <canvas id="chartHistPlataformas"></canvas>
+                                </div>
+                            </article>
+
+                            <article class="panel-card">
+                                <h3>Usuarios por Interés</h3>
+                                <p class="panel-subtitle">Consolidado vía JOIN con cat_intereses</p>
+                                <div class="chart-wrapper">
+                                    <canvas id="chartHistIntereses"></canvas>
+                                </div>
+                            </article>
+                        </div>
+
+                        <!-- Mapa de Calor Geográfico (Leaflet + leaflet.heat) -->
+                        <article id="seccionMapaGeografico" class="map-card">
+                            <div class="map-header">
+                                <div>
+                                    <h3>Mapa de Calor Geográfico de la Comunidad</h3>
+                                    <p class="panel-subtitle" style="margin-bottom: 0;">
+                                        Densidad espacial generada desde cat_ubicaciones exclusivamente para usuarios con consentimiento.
+                                    </p>
+                                </div>
+                                <span id="mapPointsBadge" class="meta-tag">Cargando coordenadas...</span>
+                            </div>
+
+                            <div id="heatmapUsuarios" aria-label="Mapa de calor geográfico de usuarios con consentimiento"></div>
+
+                            <div id="privacyMapNote" class="privacy-notice">
+                                <strong>Aviso de Privacidad Activo:</strong> Los <strong>171 usuarios</strong> con
+                                <code>consentimiento_datos = 'no'</code> fueron excluidos estrictamente de este mapa geográfico por privacidad.
+                            </div>
+                        </article>
+                    </section>
+                </main>
+            </div>
+        </div>
+    </div>
+
+    <!-- Librerías por CDN: Chart.js v4, Leaflet y leaflet.heat + cliente Socket.io -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="/js/dashboard.js"></script>
+</body>
+</html>
