@@ -380,7 +380,21 @@
                                 <span id="mapPointsBadge" class="meta-tag">Cargando ubicaciones...</span>
                             </div>
 
-                            <div id="heatmapUsuarios" aria-label="Mapa geográfico de miembros con ubicación compartida"></div>
+                            <div class="map-explorer-grid">
+                                <div id="heatmapUsuarios" aria-label="Mapa geográfico de miembros con ubicación compartida"></div>
+
+                                <aside class="map-regions-panel" aria-label="Navegación por estado">
+                                    <div class="map-regions-header">
+                                        <span class="map-regions-title">Regiones con Presencia</span>
+                                        <button type="button" id="btnResetMapa" class="btn-reset-map">
+                                            Ver todo el mapa
+                                        </button>
+                                    </div>
+                                    <div id="mapRegionsList" class="map-regions-list">
+                                        <p class="panel-subtitle" style="padding: 0.75rem; margin: 0;">Cargando regiones...</p>
+                                    </div>
+                                </aside>
+                            </div>
 
                             <div id="privacyMapNote" class="privacy-notice">
                                 <strong>Respeto a la privacidad:</strong> Por privacidad, los <strong>171 miembros</strong>

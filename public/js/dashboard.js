@@ -48,12 +48,15 @@
     const kpiUsuariosAnonimizados = document.getElementById('kpiUsuariosAnonimizados');
     const mapPointsBadge = document.getElementById('mapPointsBadge');
     const privacyMapNote = document.getElementById('privacyMapNote');
+    const mapRegionsList = document.getElementById('mapRegionsList');
+    const btnResetMapa = document.getElementById('btnResetMapa');
 
     // Instancias activas y cachés de estado
     let socket = null;
     let toastTimer = null;
     let ultimasMetricasCache = null;
     let ultimoMapaDataCache = null;
+    let boundsGeneralesMapa = null;
 
     let chartRtCanales = null;
     let chartRtTemas = null;
@@ -988,6 +991,165 @@
         });
     }
 
+    let todasLasCoordenadasHeat = [];
+    let vueloTimer = null;
+
+    function ocultarCalorEnTransicion() {
+        if (heatLayer && heatLayer._canvas) {
+            heatLayer._canvas.style.transition = 'opacity 0.15s ease';
+            heatLayer._canvas.style.opacity = '0';
+        }
+    }
+
+    function revelarCalorTrasVuelo(coordenadasObjetivo) {
+        if (!leafletMap || !heatLayer) return;
+
+        let revelado = false;
+        const aplicar = () => {
+            if (revelado) return;
+            revelado = true;
+            if (vueloTimer) clearTimeout(vueloTimer);
+
+            if (Array.isArray(coordenadasObjetivo)) {
+                heatLayer.setLatLngs(coordenadasObjetivo);
+            } else if (typeof heatLayer.redraw === 'function') {
+                heatLayer.redraw();
+            }
+
+            if (heatLayer._canvas) {
+                heatLayer._canvas.style.transition = 'opacity 0.25s ease';
+                heatLayer._canvas.style.opacity = '1';
+            }
+        };
+
+        leafletMap.once('moveend', aplicar);
+        if (vueloTimer) clearTimeout(vueloTimer);
+        vueloTimer = setTimeout(aplicar, 1050);
+    }
+
+    function restablecerVistaGeneralMapa() {
+        if (mapRegionsList) {
+            mapRegionsList
+                .querySelectorAll('.region-item.active')
+                .forEach((btn) => btn.classList.remove('active'));
+        }
+
+        if (ultimoMapaDataCache && Array.isArray(ultimoMapaDataCache.puntos)) {
+            mapPointsBadge.textContent = `${formatearNumero(ultimoMapaDataCache.puntos.length)} miembros ubicados`;
+        }
+
+        if (!leafletMap) return;
+
+        leafletMap.invalidateSize();
+        ocultarCalorEnTransicion();
+        revelarCalorTrasVuelo(todasLasCoordenadasHeat);
+
+        if (boundsGeneralesMapa) {
+            leafletMap.flyToBounds(boundsGeneralesMapa, {
+                padding: [32, 32],
+                maxZoom: 6,
+                duration: 0.9
+            });
+        } else {
+            leafletMap.flyTo([15.5, -90.0], 4, { duration: 0.9 });
+        }
+    }
+
+    if (btnResetMapa) {
+        btnResetMapa.addEventListener('click', () => {
+            restablecerVistaGeneralMapa();
+        });
+    }
+
+    function renderizarPanelRegiones(puntos) {
+        if (!mapRegionsList) return;
+        mapRegionsList.textContent = '';
+
+        if (!Array.isArray(puntos) || puntos.length === 0) {
+            const vacio = document.createElement('p');
+            vacio.className = 'panel-subtitle';
+            vacio.style.padding = '0.75rem';
+            vacio.style.margin = '0';
+            vacio.textContent = 'Sin regiones disponibles.';
+            mapRegionsList.appendChild(vacio);
+            return;
+        }
+
+        const agrupado = new Map();
+
+        for (const p of puntos) {
+            const estado = p.estado ? String(p.estado).trim() : 'Sin estado';
+            const pais = p.pais ? String(p.pais).trim() : 'México';
+            const clave = `${pais}|${estado}`;
+            const lat = Number(p.latitud);
+            const lng = Number(p.longitud);
+
+            if (!agrupado.has(clave)) {
+                const esMexico =
+                    pais.toLowerCase() === 'méxico' || pais.toLowerCase() === 'mexico';
+                const nombreMostrar = esMexico ? estado : `${estado}, ${pais}`;
+
+                agrupado.set(clave, {
+                    clave,
+                    nombreMostrar,
+                    conteo: 0,
+                    sumaLat: 0,
+                    sumaLng: 0,
+                    coordenadasHeat: []
+                });
+            }
+
+            const item = agrupado.get(clave);
+            item.conteo += 1;
+            item.sumaLat += lat;
+            item.sumaLng += lng;
+            item.coordenadasHeat.push([lat, lng, 0.85]);
+        }
+
+        const regionesOrdenadas = Array.from(agrupado.values()).sort(
+            (a, b) => b.conteo - a.conteo || a.nombreMostrar.localeCompare(b.nombreMostrar, 'es')
+        );
+
+        for (const reg of regionesOrdenadas) {
+            const latPromedio = reg.sumaLat / reg.conteo;
+            const lngPromedio = reg.sumaLng / reg.conteo;
+
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'region-item';
+            btn.title = `${reg.nombreMostrar}: ${reg.conteo} ${reg.conteo === 1 ? 'miembro' : 'miembros'}`;
+
+            const spanNombre = document.createElement('span');
+            spanNombre.className = 'region-name';
+            spanNombre.textContent = reg.nombreMostrar;
+
+            const spanConteo = document.createElement('span');
+            spanConteo.className = 'region-count';
+            spanConteo.textContent = formatearNumero(reg.conteo);
+
+            btn.appendChild(spanNombre);
+            btn.appendChild(spanConteo);
+
+            btn.addEventListener('click', () => {
+                mapRegionsList
+                    .querySelectorAll('.region-item.active')
+                    .forEach((el) => el.classList.remove('active'));
+                btn.classList.add('active');
+
+                mapPointsBadge.textContent = `${reg.nombreMostrar}: ${formatearNumero(reg.conteo)} ${reg.conteo === 1 ? 'miembro' : 'miembros'}`;
+
+                if (leafletMap) {
+                    leafletMap.invalidateSize();
+                    ocultarCalorEnTransicion();
+                    revelarCalorTrasVuelo(reg.coordenadasHeat);
+                    leafletMap.flyTo([latPromedio, lngPromedio], 9, { duration: 0.9 });
+                }
+            });
+
+            mapRegionsList.appendChild(btn);
+        }
+    }
+
     function montarMapaLeaflet(mapaData) {
         const puntos = Array.isArray(mapaData.puntos) ? mapaData.puntos : [];
 
@@ -1002,11 +1164,25 @@
                 attribution: '&copy; OpenStreetMap contributors',
                 maxZoom: 19
             }).addTo(leafletMap);
+
+            leafletMap.on('zoomstart', () => {
+                ocultarCalorEnTransicion();
+            });
+
+            leafletMap.on('moveend', () => {
+                if (heatLayer && heatLayer._canvas) {
+                    heatLayer._canvas.style.opacity = '1';
+                }
+            });
+
+            window.addEventListener('resize', () => {
+                if (leafletMap) leafletMap.invalidateSize();
+            });
         }
 
         leafletMap.invalidateSize();
 
-        const coordenadasHeat = puntos.map((p) => [
+        todasLasCoordenadasHeat = puntos.map((p) => [
             Number(p.latitud),
             Number(p.longitud),
             0.85
@@ -1016,7 +1192,7 @@
             leafletMap.removeLayer(heatLayer);
         }
 
-        heatLayer = L.heatLayer(coordenadasHeat, {
+        heatLayer = L.heatLayer(todasLasCoordenadasHeat, {
             radius: 24,
             blur: 18,
             maxZoom: 10,
@@ -1029,9 +1205,11 @@
             }
         }).addTo(leafletMap);
 
-        if (coordenadasHeat.length > 0) {
-            const bounds = L.latLngBounds(coordenadasHeat.map((c) => [c[0], c[1]]));
-            leafletMap.fitBounds(bounds, { padding: [32, 32], maxZoom: 6 });
+        if (todasLasCoordenadasHeat.length > 0) {
+            boundsGeneralesMapa = L.latLngBounds(
+                todasLasCoordenadasHeat.map((c) => [c[0], c[1]])
+            );
+            leafletMap.fitBounds(boundsGeneralesMapa, { padding: [32, 32], maxZoom: 6 });
         }
 
         setTimeout(() => {
@@ -1043,6 +1221,8 @@
         ultimoMapaDataCache = mapaData;
         const puntos = Array.isArray(mapaData.puntos) ? mapaData.puntos : [];
         mapPointsBadge.textContent = `${formatearNumero(puntos.length)} miembros ubicados`;
+
+        renderizarPanelRegiones(puntos);
 
         const vistaMapa = document.getElementById('seccionMapaGeografico');
         if (vistaMapa && vistaMapa.classList.contains('active')) {
